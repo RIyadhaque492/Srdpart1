@@ -49,6 +49,20 @@ const pad4 = (v: unknown) => {
 };
 const codeOf = (v: unknown) => String(v).split('-')[0].trim();
 
+/**
+ * Bangladeshi mobile numbers are 11 digits beginning 01. Excel treats them as
+ * numbers and drops the leading zero, so 01819313681 arrives as 1819313681.
+ * Put it back; leave anything that isn't that exact shape untouched so odd
+ * entries stay visible rather than being silently mangled.
+ */
+const phone = (v: unknown) => {
+  const digits = String(v).replace(/\D/g, '');
+  if (/^1[3-9]\d{8}$/.test(digits)) return '0' + digits;
+  if (/^01[3-9]\d{8}$/.test(digits)) return digits;
+  if (/^8801[3-9]\d{8}$/.test(digits)) return digits.slice(2);
+  return String(v).trim();
+};
+
 /** Turn one sheet's grid into validated rows, ready to POST. */
 export function stageSheet(sheetName: string, grid: unknown[][]): ParsedSheet {
   const targetKey = detectTarget(sheetName);
@@ -90,6 +104,8 @@ export function stageSheet(sheetName: string, grid: unknown[][]): ParsedSheet {
         values.business_name_bn ??= bn;
         values.business_name_en ??= en;
       }
+      if (values.primary_contact) values.primary_contact = phone(values.primary_contact);
+      if (values.spouse_contact) values.spouse_contact = phone(values.spouse_contact);
       if (values.zone_id) values.zone_id = pad4(values.zone_id);
       if (values.category_code) values.category_code = codeOf(values.category_code);
       if (values.business_type_code) values.business_type_code = codeOf(values.business_type_code);
