@@ -52,6 +52,22 @@ const codeOf = (v: unknown): string | null => {
   return k === '' ? null : k;
 };
 
+/**
+ * Values the database constrains to a fixed set. A stray entry — a religion
+ * typed into the Gender column, say — is dropped rather than allowed to
+ * reject the whole member, since these fields are optional and the name and
+ * contact matter far more.
+ */
+const GENDERS = new Set(['Male', 'Female', 'Other']);
+const DAYS = new Set(['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+
+const oneOf = (v: unknown, allowed: Set<string>): string | null => {
+  const s = String(v).trim();
+  if (allowed.has(s)) return s;
+  const titled = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  return allowed.has(titled) ? titled : null;
+};
+
 /** Excel stores zone 0102 as the number 102. Put the leading zeros back. */
 const pad4 = (v: unknown): string | null => {
   const k = codeOf(v);
@@ -113,6 +129,14 @@ export function stageSheet(sheetName: string, grid: unknown[][]): ParsedSheet {
         const { bn, en } = splitBilingual(values.business_name as string);
         values.business_name_bn ??= bn;
         values.business_name_en ??= en;
+      }
+      if (values.gender) {
+        const g = oneOf(values.gender, GENDERS);
+        if (g) values.gender = g; else delete values.gender;
+      }
+      if (values.off_day) {
+        const d = oneOf(values.off_day, DAYS);
+        if (d) values.off_day = d; else delete values.off_day;
       }
       if (values.primary_contact) values.primary_contact = phone(values.primary_contact);
       if (values.spouse_contact) values.spouse_contact = phone(values.spouse_contact);
