@@ -42,12 +42,22 @@ function buildColumnIndex(headerRow: unknown[], target: Target) {
   return map;
 }
 
-/** Excel stores zone 0102 as the number 102. Put the leading zeros back. */
-const pad4 = (v: unknown) => {
+/**
+ * Pull the code off the front of "0204-জিইসি". Cells holding a placeholder
+ * such as "- / -" leave nothing before the first dash; those become null
+ * rather than an empty string, which would fail the foreign key.
+ */
+const codeOf = (v: unknown): string | null => {
   const k = String(v).split('-')[0].trim();
+  return k === '' ? null : k;
+};
+
+/** Excel stores zone 0102 as the number 102. Put the leading zeros back. */
+const pad4 = (v: unknown): string | null => {
+  const k = codeOf(v);
+  if (k === null) return null;
   return /^\d+$/.test(k) ? k.padStart(4, '0') : k;
 };
-const codeOf = (v: unknown) => String(v).split('-')[0].trim();
 
 /**
  * Bangladeshi mobile numbers are 11 digits beginning 01. Excel treats them as
@@ -106,13 +116,26 @@ export function stageSheet(sheetName: string, grid: unknown[][]): ParsedSheet {
       }
       if (values.primary_contact) values.primary_contact = phone(values.primary_contact);
       if (values.spouse_contact) values.spouse_contact = phone(values.spouse_contact);
-      if (values.zone_id) values.zone_id = pad4(values.zone_id);
-      if (values.category_code) values.category_code = codeOf(values.category_code);
-      if (values.business_type_code) values.business_type_code = codeOf(values.business_type_code);
+      // a null here means the cell was a placeholder; drop the key entirely
+      // so the column stays empty instead of holding an unmatched value
+      if (values.zone_id) {
+        const z = pad4(values.zone_id);
+        if (z) values.zone_id = z; else delete values.zone_id;
+      }
+      if (values.category_code) {
+        const c = codeOf(values.category_code);
+        if (c) values.category_code = c; else delete values.category_code;
+      }
+      if (values.business_type_code) {
+        const b = codeOf(values.business_type_code);
+        if (b) values.business_type_code = b; else delete values.business_type_code;
+      }
     }
     if (targetKey === 'proposals') {
       for (const k of ['cro_id', 'incharge_id'] as const) {
-        if (values[k]) values[k] = codeOf(values[k]);
+        if (!values[k]) continue;
+        const c = codeOf(values[k]);
+        if (c) values[k] = c; else delete values[k];
       }
     }
 
