@@ -1,10 +1,10 @@
 # SRD loan operations
 
-Entries 01 and 02 of the SRD system: the member register, and loan proposals. Members can be added
+All four SRD entries: the member register, loan proposals, feasibility review and the loan committee. Members can be added
 one at a time through a form, or many at once by uploading the existing Excel
 workbook. Runs on Vercel with a Neon Postgres database.
 
-Feasibility (Entry 03), loan management (Entry 04) and collections come later. The tables for them already exist
+Collections are not yet wired into the interface, though the table exists. The tables for them already exist
 in the schema, but nothing in the interface touches them yet.
 
 ---
