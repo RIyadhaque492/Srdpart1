@@ -1,10 +1,10 @@
-# SRD member register
+# SRD loan operations
 
-Step one of the SRD system: the member register (Entry 01). Members can be added
+Entries 01 and 02 of the SRD system: the member register, and loan proposals. Members can be added
 one at a time through a form, or many at once by uploading the existing Excel
 workbook. Runs on Vercel with a Neon Postgres database.
 
-Loans, feasibility and collections come later. The tables for them already exist
+Feasibility (Entry 03), loan management (Entry 04) and collections come later. The tables for them already exist
 in the schema, but nothing in the interface touches them yet.
 
 ---

@@ -40,7 +40,7 @@ export default async function Page() {
 
       <p className="note">
         Step one is the member register. <Link href="/members/new">Add a member</Link> one
-        at a time, or <Link href="/import">upload a workbook</Link> to bring in many at once.
+        at a time, or <Link href="/members/new">upload a workbook</Link> to bring in many at once.
         Loans and collections come later, once this list is right.
       </p>
 

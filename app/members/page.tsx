@@ -49,7 +49,7 @@ export default function Members() {
       {!busy && rows.length === 0 && (
         <p className="note">
           No members found. <Link href="/members/new">Add one</Link> or{' '}
-          <Link href="/import">upload a workbook</Link>.
+          <Link href="/members/new">upload a workbook</Link>.
         </p>
       )}
 
