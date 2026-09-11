@@ -56,28 +56,30 @@ export default function Members() {
       {rows.length > 0 && (
         <>
           <p className="note">{rows.length} shown{rows.length === 50 || rows.length === 200 ? ' (newest first — search to narrow)' : ''}.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Profile</th><th>Name</th><th>Contact</th><th>Business</th>
-                <th>Area</th><th>Zone</th><th>Off day</th><th className="num">Portfolios</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m) => (
-                <tr key={m.profile_id}>
-                  <td>{m.profile_id}</td>
-                  <td>{m.member_name}</td>
-                  <td>{m.primary_contact ?? '—'}</td>
-                  <td>{m.business_name ?? '—'}</td>
-                  <td>{m.area_code ?? '—'}</td>
-                  <td>{m.zone_id ?? '—'}</td>
-                  <td>{m.off_day ?? '—'}</td>
-                  <td className="num">{m.no_of_portfolios ?? 0}</td>
+          <div className="scroller">
+            <table>
+              <thead>
+                <tr>
+                  <th>Profile</th><th>Name</th><th>Contact</th><th>Business</th>
+                  <th>Area</th><th>Zone</th><th>Off day</th><th className="num">Portfolios</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((m) => (
+                  <tr key={m.profile_id}>
+                    <td>{m.profile_id}</td>
+                    <td>{m.member_name}</td>
+                    <td>{m.primary_contact ?? '—'}</td>
+                    <td>{m.business_name ?? '—'}</td>
+                    <td>{m.area_code ?? '—'}</td>
+                    <td>{m.zone_id ?? '—'}</td>
+                    <td>{m.off_day ?? '—'}</td>
+                    <td className="num">{m.no_of_portfolios ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </>

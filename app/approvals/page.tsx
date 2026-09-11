@@ -134,30 +134,32 @@ export default function Approvals() {
           {queue.length > 0 && (
             <>
               <p className="note">{queue.length} in the committee.</p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th><th>Member</th><th className="num">Proposed</th>
-                    <th className="num">Approved</th><th>Approvals</th><th>Disbursed</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queue.map((r) => {
-                    const n = [r.pm_check, r.dir_check, r.contr_check, r.ceo_check].filter(Boolean).length;
-                    return (
-                      <tr key={r.proposal_id} onClick={() => pick(r)} style={{ cursor: 'pointer' }}>
-                        <td>{r.proposal_id}</td>
-                        <td>{r.customer_name}</td>
-                        <td className="num">{bdt(r.proposed_loan_amount)}</td>
-                        <td className="num">{bdt(r.approved_amount)}</td>
-                        <td>{n} of 4</td>
-                        <td>{day(r.disbursed_date)}</td>
-                        <td style={{ color: 'var(--accent)' }}>Open</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="scroller">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th><th>Member</th><th className="num">Proposed</th>
+                      <th className="num">Approved</th><th>Approvals</th><th>Disbursed</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queue.map((r) => {
+                      const n = [r.pm_check, r.dir_check, r.contr_check, r.ceo_check].filter(Boolean).length;
+                      return (
+                        <tr key={r.proposal_id} onClick={() => pick(r)} style={{ cursor: 'pointer' }}>
+                          <td>{r.proposal_id}</td>
+                          <td>{r.customer_name}</td>
+                          <td className="num">{bdt(r.proposed_loan_amount)}</td>
+                          <td className="num">{bdt(r.approved_amount)}</td>
+                          <td>{n} of 4</td>
+                          <td>{day(r.disbursed_date)}</td>
+                          <td style={{ color: 'var(--accent)' }}>Open</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </>

@@ -119,29 +119,31 @@ export default function Feasibility() {
           {queue.length > 0 && (
             <>
               <p className="note">{queue.length} waiting.</p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th><th>Member</th><th className="num">Amount</th>
-                    <th className="num">Months</th><th>Area</th><th>Prospect date</th>
-                    <th>Stage</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {queue.map((r) => (
-                    <tr key={r.proposal_id} onClick={() => pick(r)} style={{ cursor: 'pointer' }}>
-                      <td>{r.proposal_id}</td>
-                      <td>{r.customer_name}</td>
-                      <td className="num">{bdt(r.proposed_loan_amount)}</td>
-                      <td className="num">{r.proposed_duration_months ?? '—'}</td>
-                      <td>{r.area ?? '—'}</td>
-                      <td>{day(r.prospect_date)}</td>
-                      <td>{r.stage}</td>
-                      <td style={{ color: 'var(--accent)' }}>Review</td>
+              <div className="scroller">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th><th>Member</th><th className="num">Amount</th>
+                      <th className="num">Months</th><th>Area</th><th>Prospect date</th>
+                      <th>Stage</th><th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {queue.map((r) => (
+                      <tr key={r.proposal_id} onClick={() => pick(r)} style={{ cursor: 'pointer' }}>
+                        <td>{r.proposal_id}</td>
+                        <td>{r.customer_name}</td>
+                        <td className="num">{bdt(r.proposed_loan_amount)}</td>
+                        <td className="num">{r.proposed_duration_months ?? '—'}</td>
+                        <td>{r.area ?? '—'}</td>
+                        <td>{day(r.prospect_date)}</td>
+                        <td>{r.stage}</td>
+                        <td style={{ color: 'var(--accent)' }}>Review</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </>

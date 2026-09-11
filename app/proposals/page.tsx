@@ -58,30 +58,32 @@ export default function Proposals() {
       )}
 
       {rows.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th><th>Member</th><th className="num">Amount</th>
-              <th className="num">Months</th><th className="num">Installment</th>
-              <th>Off day</th><th>Area</th><th>Date</th><th>Stage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.proposal_id}>
-                <td>{p.proposal_id}</td>
-                <td>{p.customer_name}</td>
-                <td className="num">{bdt(p.proposed_loan_amount)}</td>
-                <td className="num">{p.proposed_duration_months ?? '—'}</td>
-                <td className="num">{bdt(p.proposed_installment)}</td>
-                <td>{p.offday ?? '—'}</td>
-                <td>{p.area ?? '—'}</td>
-                <td>{p.prospect_date ? String(p.prospect_date).slice(0, 10) : '—'}</td>
-                <td>{p.stage}</td>
+        <div className="scroller">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Member</th><th className="num">Amount</th>
+                <th className="num">Months</th><th className="num">Installment</th>
+                <th>Off day</th><th>Area</th><th>Date</th><th>Stage</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.proposal_id}>
+                  <td>{p.proposal_id}</td>
+                  <td>{p.customer_name}</td>
+                  <td className="num">{bdt(p.proposed_loan_amount)}</td>
+                  <td className="num">{p.proposed_duration_months ?? '—'}</td>
+                  <td className="num">{bdt(p.proposed_installment)}</td>
+                  <td>{p.offday ?? '—'}</td>
+                  <td>{p.area ?? '—'}</td>
+                  <td>{p.prospect_date ? String(p.prospect_date).slice(0, 10) : '—'}</td>
+                  <td>{p.stage}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

@@ -389,45 +389,49 @@ function FileUpload() {
       {sheets.length > 0 && (
         <>
           <h3>Result</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Sheet</th><th className="num">Rows</th>
-                <th className="num">Imported</th><th className="num">Failed</th><th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sheets.map((s) => (
-                <tr key={s.sheet}>
-                  <td>{s.sheet}</td>
-                  <td className="num">{s.total}</td>
-                  <td className="num">{s.ok}</td>
-                  <td className="num">{s.failed}</td>
-                  <td>
-                    {s.skipped ? s.skipped
-                      : !s.done ? `${Math.round((s.sent / Math.max(s.total, 1)) * 100)}%`
-                      : s.errors.length ? `Row ${s.errors[0].row}: ${s.errors[0].problem.slice(0, 50)}`
-                      : 'Clean'}
-                  </td>
+          <div className="scroller">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sheet</th><th className="num">Rows</th>
+                  <th className="num">Imported</th><th className="num">Failed</th><th>Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sheets.map((s) => (
+                  <tr key={s.sheet}>
+                    <td>{s.sheet}</td>
+                    <td className="num">{s.total}</td>
+                    <td className="num">{s.ok}</td>
+                    <td className="num">{s.failed}</td>
+                    <td>
+                      {s.skipped ? s.skipped
+                        : !s.done ? `${Math.round((s.sent / Math.max(s.total, 1)) * 100)}%`
+                        : s.errors.length ? `Row ${s.errors[0].row}: ${s.errors[0].problem.slice(0, 50)}`
+                        : 'Clean'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {sheets.some((s) => s.errors.length > 0) && (
             <>
               <h3>Rows that need fixing</h3>
-              <table>
-                <thead><tr><th className="num">Excel row</th><th>Problem</th></tr></thead>
-                <tbody>
-                  {sheets.flatMap((s) => s.errors.map((e, i) => (
-                    <tr key={`${s.sheet}-${i}`}>
-                      <td className="num">{e.row}</td>
-                      <td>{e.problem}</td>
-                    </tr>
-                  )))}
-                </tbody>
-              </table>
+              <div className="scroller">
+                <table>
+                  <thead><tr><th className="num">Excel row</th><th>Problem</th></tr></thead>
+                  <tbody>
+                    {sheets.flatMap((s) => s.errors.map((e, i) => (
+                      <tr key={`${s.sheet}-${i}`}>
+                        <td className="num">{e.row}</td>
+                        <td>{e.problem}</td>
+                      </tr>
+                    )))}
+                  </tbody>
+                </table>
+              </div>
               <p className="note">
                 Fix these in the spreadsheet and upload it again. Rows that already
                 landed will be updated in place.
