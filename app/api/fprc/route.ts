@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
              f.rfp_date, f.feasibility_score, f.approved, f.rejected
       from v_proposals p
       left join fprc f on f.proposal_id = p.proposal_id
-      where p.stage in ('Prospect','FPRC')
+      where p.stage = 'FPRC'
       order by p.prospect_date asc nulls last limit 200`);
   }
 

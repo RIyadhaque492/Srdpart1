@@ -53,6 +53,27 @@ const EMPTY = {
   client_dob: '', perm_thana: '', off_day: 'Fri', old_mcl: '',
 };
 
+/**
+ * Defined at module scope on purpose. A component declared inside the form
+ * is a brand-new component type on every render, so React unmounts the old
+ * input and mounts a fresh one — which drops focus after each keystroke.
+ */
+function Field({ id, label, value, onChange, type = 'text', hint }: {
+  id: string; label: string; value: string;
+  onChange: (k: string, v: string) => void;
+  type?: string; hint?: string;
+}) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type={type} value={value}
+             inputMode={type === 'tel' ? 'numeric' : undefined}
+             onChange={(e) => onChange(id, e.target.value)} />
+      {hint && <span className="hint">{hint}</span>}
+    </div>
+  );
+}
+
 function ManualEntry({ lk }: { lk: Lookups | null }) {
   const [form, setForm] = useState({ ...EMPTY });
   const [busy, setBusy] = useState(false);
@@ -98,17 +119,6 @@ function ManualEntry({ lk }: { lk: Lookups | null }) {
     }
   }
 
-  const F = ({ k, label, type = 'text', hint }:
-             { k: keyof typeof EMPTY; label: string; type?: string; hint?: string }) => (
-    <div className="field">
-      <label htmlFor={k}>{label}</label>
-      <input id={k} type={type} value={form[k]}
-             inputMode={type === 'tel' ? 'numeric' : undefined}
-             onChange={(e) => set(k, e.target.value)} />
-      {hint && <span className="hint">{hint}</span>}
-    </div>
-  );
-
   return (
     <>
       <p className="note">
@@ -138,27 +148,27 @@ function ManualEntry({ lk }: { lk: Lookups | null }) {
 
       <h3>Member</h3>
       <div className="grid2">
-        <F k="member_name" label="Member name *" />
-        <F k="primary_contact" label="Primary contact *" type="tel" hint="11 digits, e.g. 01712345678" />
-        <F k="nid_no" label="NID number" hint="10, 13 or 17 digits" />
-        <F k="client_dob" label="Date of birth" type="date" />
+        <Field id="member_name" label="Member name *" value={form.member_name} onChange={set} />
+        <Field id="primary_contact" label="Primary contact *" type="tel" hint="11 digits, e.g. 01712345678" value={form.primary_contact} onChange={set} />
+        <Field id="nid_no" label="NID number" hint="10, 13 or 17 digits" value={form.nid_no} onChange={set} />
+        <Field id="client_dob" label="Date of birth" type="date" value={form.client_dob} onChange={set} />
         <div className="field">
           <label htmlFor="gender">Gender</label>
           <select id="gender" value={form.gender} onChange={(e) => set('gender', e.target.value)}>
             <option value="">—</option><option>Male</option><option>Female</option><option>Other</option>
           </select>
         </div>
-        <F k="religion" label="Religion" />
-        <F k="father_name" label="Father's name" />
-        <F k="mother_name" label="Mother's name" />
-        <F k="spouse_name" label="Spouse name" />
-        <F k="spouse_contact" label="Spouse contact" type="tel" />
+        <Field id="religion" label="Religion" value={form.religion} onChange={set} />
+        <Field id="father_name" label="Father's name" value={form.father_name} onChange={set} />
+        <Field id="mother_name" label="Mother's name" value={form.mother_name} onChange={set} />
+        <Field id="spouse_name" label="Spouse name" value={form.spouse_name} onChange={set} />
+        <Field id="spouse_contact" label="Spouse contact" type="tel" value={form.spouse_contact} onChange={set} />
       </div>
 
       <h3>Business</h3>
       <div className="grid2">
-        <F k="business_name" label="Business name" hint="Bangla / English is split automatically" />
-        <F k="business_address" label="Business address" />
+        <Field id="business_name" label="Business name" hint="Bangla / English is split automatically" value={form.business_name} onChange={set} />
+        <Field id="business_address" label="Business address" value={form.business_address} onChange={set} />
         <div className="field">
           <label htmlFor="area_code">Business area</label>
           <select id="area_code" value={form.area_code} onChange={(e) => set('area_code', e.target.value)}>
@@ -197,15 +207,15 @@ function ManualEntry({ lk }: { lk: Lookups | null }) {
             {DAYS.map((d) => <option key={d}>{d}</option>)}
           </select>
         </div>
-        <F k="old_mcl" label="Old MCL" />
+        <Field id="old_mcl" label="Old MCL" value={form.old_mcl} onChange={set} />
       </div>
 
       <h3>Addresses</h3>
       <div className="grid2">
-        <F k="present_address" label="Present address" />
-        <F k="permanent_address" label="Permanent address" />
-        <F k="perm_thana" label="Permanent thana" />
-        <F k="profile_date" label="Profile date" type="date" />
+        <Field id="present_address" label="Present address" value={form.present_address} onChange={set} />
+        <Field id="permanent_address" label="Permanent address" value={form.permanent_address} onChange={set} />
+        <Field id="perm_thana" label="Permanent thana" value={form.perm_thana} onChange={set} />
+        <Field id="profile_date" label="Profile date" type="date" value={form.profile_date} onChange={set} />
       </div>
 
       <div style={{ marginTop: 22, display: 'flex', gap: 10 }}>

@@ -23,6 +23,25 @@ const BLANK = {
   approved_date: new Date().toISOString().slice(0, 10),
 };
 
+/**
+ * Module scope, not inside the component: a component defined inline is a new
+ * type on every render, so React remounts the input and focus is lost after
+ * each keystroke.
+ */
+function Score({ id, label, value, onChange, hint }: {
+  id: string; label: string; value: string;
+  onChange: (k: string, v: string) => void; hint?: string;
+}) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="number" step="0.01" inputMode="decimal" value={value}
+             onChange={(e) => onChange(id, e.target.value)} />
+      {hint && <span className="hint">{hint}</span>}
+    </div>
+  );
+}
+
 export default function Feasibility() {
   const [queue, setQueue] = useState<Queued[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +72,7 @@ export default function Feasibility() {
     });
   }
 
-  const set = (k: keyof typeof BLANK, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(decision: 'approve' | 'reject' | 'save') {
     if (!picked) return;
@@ -90,21 +109,13 @@ export default function Feasibility() {
         / Number(picked.old_loan_amount) * 100)
     : null;
 
-  const N = ({ k, label, hint }: { k: keyof typeof BLANK; label: string; hint?: string }) => (
-    <div className="field">
-      <label htmlFor={k}>{label}</label>
-      <input id={k} type="number" step="0.01" value={form[k]}
-             onChange={(e) => set(k, e.target.value)} />
-      {hint && <span className="hint">{hint}</span>}
-    </div>
-  );
-
   return (
     <>
       <h2>Feasibility review</h2>
       <p className="note">
-        Proposals waiting on a decision. Client details, previous loan and the
-        increase come from the proposal — only the scores and the decision are entered here.
+        Proposals sent here from the proposal list. Client details, previous loan and
+        the increase come from the proposal — only the scores and the decision are
+        entered here.
       </p>
 
       {done && <div className="msg ok">{done}</div>}
@@ -114,7 +125,10 @@ export default function Feasibility() {
         <>
           {loading && <p className="note">Loading…</p>}
           {!loading && queue.length === 0 && (
-            <p className="note">Nothing waiting. Every proposal has been through feasibility.</p>
+            <p className="note">
+              Nothing waiting. Open <a href="/proposals">Proposals</a>, tick the ones
+              that are ready and send them here.
+            </p>
           )}
           {queue.length > 0 && (
             <>
@@ -191,12 +205,12 @@ export default function Feasibility() {
               <input id="feasibility_date" type="date" value={form.feasibility_date}
                      onChange={(e) => set('feasibility_date', e.target.value)} />
             </div>
-            <N k="cr_score" label="CR score" />
-            <N k="regularity_score" label="Regularity score" hint="RS Matrix 5.0" />
-            <N k="performance_score" label="Performance score" />
-            <N k="risk_score" label="Risk score" />
-            <N k="feasibility_score" label="Feasibility score" />
-            <N k="fs_score_pct" label="FS score %" />
+            <Score id="cr_score" label="CR score" value={form.cr_score} onChange={set} />
+            <Score id="regularity_score" label="Regularity score" hint="RS Matrix 5.0" value={form.regularity_score} onChange={set} />
+            <Score id="performance_score" label="Performance score" value={form.performance_score} onChange={set} />
+            <Score id="risk_score" label="Risk score" value={form.risk_score} onChange={set} />
+            <Score id="feasibility_score" label="Feasibility score" value={form.feasibility_score} onChange={set} />
+            <Score id="fs_score_pct" label="FS score %" value={form.fs_score_pct} onChange={set} />
             <div className="field">
               <label htmlFor="active_rating">Active rating</label>
               <input id="active_rating" value={form.active_rating}

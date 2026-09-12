@@ -29,6 +29,7 @@ interface Detail {
   member: {
     profile_id: string; member_name: string; business_name: string | null;
     area_code: string | null; zone_id: string | null; zone_name: string | null;
+    old_mcl: string | null;
     category_name: string | null; off_day: string | null;
     no_of_portfolios: number | null; last_portfolio: string | null; pf_status: string | null;
     lfd: string | null; led: string | null; lsd: string | null; old_loan_amount: string | null;
@@ -37,6 +38,22 @@ interface Detail {
 }
 interface Quote {
   installment: string; total_receivable: string; installments: number; from_schedule: boolean;
+}
+
+/** Old MCL options: the member's recorded value plus any portfolio rows.
+ *  Portfolios are only present once the Portfolio sheet has been imported,
+ *  so the member's own value is what makes this work today. */
+function mclOf(d: Detail): string | null {
+  const v = (d.member.old_mcl ?? '').trim();
+  return v && v.toLowerCase() !== 'new' ? v : null;
+}
+
+function mclOptions(d: Detail): string[] {
+  const out = new Set<string>();
+  const own = mclOf(d);
+  if (own) out.add(own);
+  d.portfolios.forEach((p) => out.add(p.portfolio_no));
+  return Array.from(out);
 }
 
 function ManualEntry() {
@@ -49,7 +66,6 @@ function ManualEntry() {
   const [prospectDate, setProspectDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState('');
   const [months, setMonths] = useState('');
-  const [zeroInstall, setZeroInstall] = useState(false);
   const [crScore, setCrScore] = useState('');
 
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -77,7 +93,7 @@ function ManualEntry() {
       const res = await fetch(`/api/members/${encodeURIComponent(id)}`);
       const d: Detail = await res.json();
       setDetail(d);
-      setOldMcl(d.member.last_portfolio ?? 'New');
+      setOldMcl(d.member.last_portfolio ?? mclOf(d) ?? 'New');
     } catch {
       setError('Could not load that member.');
     }
@@ -98,7 +114,7 @@ function ManualEntry() {
 
   function reset() {
     setQ(''); setHits([]); setDetail(null); setOldMcl('New');
-    setAmount(''); setMonths(''); setZeroInstall(false); setCrScore('');
+    setAmount(''); setMonths(''); setCrScore('');
     setQuote(null); setError(null); setOpen([]);
   }
 
@@ -114,7 +130,6 @@ function ManualEntry() {
           prospect_date: prospectDate,
           proposed_loan_amount: Number(amount),
           proposed_duration_months: Number(months),
-          zero_install: zeroInstall,
           cr_score: crScore ? Number(crScore) : null,
           allow_duplicate: allowDuplicate,
         }),
@@ -138,7 +153,8 @@ function ManualEntry() {
       {saved && (
         <div className="msg ok">
           Proposal <strong>{saved.proposal_id}</strong> created for {saved.customer_name} at{' '}
-          <strong>{bdt(saved.proposed_installment)}</strong> per installment.
+          <strong>{bdt(saved.proposed_installment)}</strong> per installment. Find it under
+          Proposals and send it to feasibility when you are ready.
         </div>
       )}
       {error && (
@@ -214,12 +230,20 @@ function ManualEntry() {
               <label htmlFor="oldMcl">Old MCL</label>
               <select id="oldMcl" value={oldMcl} onChange={(e) => setOldMcl(e.target.value)}>
                 <option value="New">New</option>
-                {detail.portfolios.map((p) => (
-                  <option key={p.portfolio_no} value={p.portfolio_no}>
-                    {p.portfolio_no} — {bdt(p.investment_amount)} ({p.status ?? '—'})
-                  </option>
-                ))}
+                {mclOptions(detail).map((no) => {
+                  const pf = detail.portfolios.find((p) => p.portfolio_no === no);
+                  return (
+                    <option key={no} value={no}>
+                      {pf ? `${no} — ${bdt(pf.investment_amount)} (${pf.status ?? '—'})` : no}
+                    </option>
+                  );
+                })}
               </select>
+              <span className="hint">
+                {mclOptions(detail).length
+                  ? 'From this member\u2019s record and past loans'
+                  : 'No previous loan on file — this is a first loan'}
+              </span>
             </div>
             <div className="field">
               <label htmlFor="pdate">Prospect date</label>
@@ -240,13 +264,6 @@ function ManualEntry() {
               <label htmlFor="cr">CR score</label>
               <input id="cr" type="number" step="0.01" value={crScore}
                      onChange={(e) => setCrScore(e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor="zi">Zero install</label>
-              <select id="zi" value={zeroInstall ? 'yes' : 'no'}
-                      onChange={(e) => setZeroInstall(e.target.value === 'yes')}>
-                <option value="no">No</option><option value="yes">Yes</option>
-              </select>
             </div>
           </div>
 

@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const [member] = await sql`
     select m.profile_id, m.member_name, m.business_name, m.primary_contact,
-           m.area_code, m.zone_id, m.category_code, m.off_day,
+           m.area_code, m.zone_id, m.category_code, m.off_day, m.old_mcl,
            z.name as zone_name, c.name as category_name,
            v.no_of_portfolios, v.last_portfolio, v.pf_status,
            v.lfd, v.led, v.lsd, v.old_loan_amount

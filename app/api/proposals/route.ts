@@ -28,6 +28,29 @@ async function nextProposalId(when: Date) {
   return `${prefix}${row.serial}`;
 }
 
+/** Mark a proposal for feasibility review. Until this happens it sits in the
+ *  proposal list only — nothing reaches the review queue by itself. */
+export async function PATCH(req: NextRequest) {
+  const b = await req.json();
+  const ids: string[] = Array.isArray(b.proposal_ids) ? b.proposal_ids : [];
+  if (!ids.length) {
+    return NextResponse.json({ error: 'Choose at least one proposal.' }, { status: 400 });
+  }
+
+  const blocked = await sql`
+    select proposal_id, stage from proposals
+    where proposal_id = any(${ids}) and stage <> 'Prospect'` as { proposal_id: string; stage: string }[];
+  if (blocked.length) {
+    return NextResponse.json({
+      error: `Already past this step: ${blocked.map((x) => `${x.proposal_id} (${x.stage})`).join(', ')}`,
+    }, { status: 409 });
+  }
+
+  await sql`update proposals set stage = 'FPRC', updated_at = now()
+            where proposal_id = any(${ids}) and stage = 'Prospect'`;
+  return NextResponse.json({ sent: ids.length });
+}
+
 export async function POST(req: NextRequest) {
   const b = await req.json();
   const problems: string[] = [];
@@ -59,10 +82,10 @@ export async function POST(req: NextRequest) {
   try {
     await sql`
       insert into proposals (proposal_id, profile_id, old_mcl, prospect_date,
-        proposed_loan_amount, proposed_duration_months, zero_install, cr_score,
+        proposed_loan_amount, proposed_duration_months, cr_score,
         cro_id, incharge_id, stage)
       values (${id}, ${b.profile_id}, ${b.old_mcl || 'New'}, ${b.prospect_date},
-        ${amount}, ${months}, ${b.zero_install ?? false}, ${b.cr_score || null},
+        ${amount}, ${months}, ${b.cr_score || null},
         ${b.cro_id || null}, ${b.incharge_id || null}, 'Prospect')`;
     const [row] = await sql`select * from v_proposals where proposal_id = ${id}`;
     return NextResponse.json(row, { status: 201 });

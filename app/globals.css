@@ -302,3 +302,8 @@ button.danger:hover:not(:disabled) { background: #7E3115; border-color: #7E3115;
 
 .bar { height: 5px; background: var(--rule); margin-top: 20px; }
 .bar > div { height: 100%; background: var(--seal); transition: width .25s ease; }
+
+/* row selection in the proposal list */
+table input[type=checkbox] {
+  width: 19px; height: 19px; accent-color: var(--seal); cursor: pointer; margin: 0;
+}
