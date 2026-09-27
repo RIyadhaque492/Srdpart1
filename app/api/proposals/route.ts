@@ -17,15 +17,39 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(rows);
 }
 
-/** ProposalID is YR + Month + serial, per the SRD: 26 02 1 -> "26021". */
-async function nextProposalId(when: Date) {
-  const prefix = String(when.getFullYear()).slice(2) + String(when.getMonth() + 1).padStart(2, '0');
+/**
+ * ProposalID is YR + Month + serial, per the SRD: 26 09 1 -> "26091".
+ *
+ * The serial is worked out inside the INSERT itself rather than by a separate
+ * SELECT, so the number cannot go stale between reading it and using it.
+ *
+ * Note `substr(proposal_id, $n::int)`, not `substring(... from $n)`. With a
+ * bare parameter Postgres reads the second argument as a regular expression
+ * instead of a position, so the count silently came back as zero every time
+ * and the same ID was handed out over and over.
+ */
+const PREFIX_LEN = 4;                       // YY + MM
+
+function monthPrefix(when: Date) {
+  return String(when.getFullYear()).slice(2) + String(when.getMonth() + 1).padStart(2, '0');
+}
+
+async function insertProposal(prefix: string, b: Record<string, unknown>,
+                              amount: number, months: number) {
   const [row] = await sql`
-    select coalesce(max(substring(proposal_id from ${prefix.length + 1})::int), 0) + 1 as serial
+    insert into proposals (proposal_id, profile_id, old_mcl, prospect_date,
+      proposed_loan_amount, proposed_duration_months, cr_score,
+      cro_id, incharge_id, stage)
+    select
+      ${prefix} || (coalesce(max(substr(proposal_id, ${PREFIX_LEN + 1}::int)::bigint), 0) + 1)::text,
+      ${b.profile_id as string}, ${(b.old_mcl as string) || 'New'}, ${b.prospect_date as string},
+      ${amount}, ${months}, ${(b.cr_score as string) || null},
+      ${(b.cro_id as string) || null}, ${(b.incharge_id as string) || null}, 'Prospect'
     from proposals
     where proposal_id like ${prefix + '%'}
-      and substring(proposal_id from ${prefix.length + 1}) ~ '^[0-9]+$'` as { serial: number }[];
-  return `${prefix}${row.serial}`;
+      and substr(proposal_id, ${PREFIX_LEN + 1}::int) ~ '^[0-9]+$'
+    returning proposal_id` as { proposal_id: string }[];
+  return row.proposal_id;
 }
 
 /** Mark a proposal for feasibility review. Until this happens it sits in the
@@ -76,27 +100,27 @@ export async function POST(req: NextRequest) {
     }, { status: 409 });
   }
 
-  const when = new Date(b.prospect_date);
-  const id = await nextProposalId(when);
+  const prefix = monthPrefix(new Date(b.prospect_date));
 
-  try {
-    await sql`
-      insert into proposals (proposal_id, profile_id, old_mcl, prospect_date,
-        proposed_loan_amount, proposed_duration_months, cr_score,
-        cro_id, incharge_id, stage)
-      values (${id}, ${b.profile_id}, ${b.old_mcl || 'New'}, ${b.prospect_date},
-        ${amount}, ${months}, ${b.cr_score || null},
-        ${b.cro_id || null}, ${b.incharge_id || null}, 'Prospect')`;
-    const [row] = await sql`select * from v_proposals where proposal_id = ${id}`;
-    return NextResponse.json(row, { status: 201 });
-  } catch (e) {
-    const msg = (e as Error).message;
-    if (msg.includes('proposals_pkey')) {
-      return NextResponse.json({ error: 'That Proposal ID was just taken. Try again.' }, { status: 409 });
+  // Two officers saving at the same instant can land on the same serial.
+  // Retry rather than making a person read an error and press the button again.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const id = await insertProposal(prefix, b, amount, months);
+      const [row] = await sql`select * from v_proposals where proposal_id = ${id}`;
+      return NextResponse.json(row, { status: 201 });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('proposals_pkey') && attempt < 4) continue;
+      if (msg.includes('proposals_pkey')) {
+        return NextResponse.json(
+          { error: 'Too many proposals were saved at once. Try once more.' }, { status: 409 });
+      }
+      if (msg.includes('profile_id_fkey')) {
+        return NextResponse.json({ error: 'That member is not on file.' }, { status: 400 });
+      }
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
-    if (msg.includes('profile_id_fkey')) {
-      return NextResponse.json({ error: 'That member is not on file.' }, { status: 400 });
-    }
-    return NextResponse.json({ error: msg }, { status: 400 });
   }
+  return NextResponse.json({ error: 'Could not allocate a Proposal ID.' }, { status: 500 });
 }
