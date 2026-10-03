@@ -16,6 +16,9 @@ export default async function Page() {
       (select count(*) from proposals where stage = 'Disbursed')           as disbursed,
       (select coalesce(sum(approved_amount), 0) from lmc
         where disbursed_date is not null)                                  as lent,
+      (select count(*) from portfolios where status = 'Running')           as running,
+      (select coalesce(sum(outstandings), 0) from portfolios
+        where status = 'Running')                                          as due,
       (select count(*) from members
         where area_code is null or zone_id is null or nid_no is null)      as incomplete
   ` as any[];
@@ -53,6 +56,10 @@ export default async function Page() {
 
       <p className="note">
         {bdt(c.lent)} lent to date.
+        {Number(c.running) > 0 && (
+          <> {c.running} loans are running with {bdt(c.due)} outstanding —{' '}
+            <Link href="/portfolio">see portfolios</Link>.</>
+        )}
         {Number(c.incomplete) > 0 && (
           <> {c.incomplete} member records are missing an area, zone or NID —{' '}
             <Link href="/members">check them</Link>.</>

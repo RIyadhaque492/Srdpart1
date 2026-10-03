@@ -42,7 +42,19 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    await sql`
+    if (b.disbursed_date) {
+      const ok = await sql`select 1 from fprc where proposal_id = ${b.proposal_id} and approved`;
+      if (!ok.length) {
+        return NextResponse.json({
+          error: 'This proposal has not been approved at feasibility, so it cannot be disbursed.',
+        }, { status: 400 });
+      }
+    }
+
+    // Everything below succeeds or fails together. Before, the committee record,
+    // the stage change and (missing) portfolio were separate writes, so a failure
+    // part-way left a loan marked Disbursed with nothing behind it.
+    const steps = [sql`
       insert into lmc (proposal_id, approved_date, approved_amount, approved_duration_months,
         pm_check, pm_time, dir_check, contr_check, ceo_check, approved_time,
         disbursed_date, start_date, end_date, actual_installment)
@@ -63,12 +75,49 @@ export async function PUT(req: NextRequest) {
         approved_time = coalesce(lmc.approved_time, excluded.approved_time),
         disbursed_date = excluded.disbursed_date, start_date = excluded.start_date,
         end_date = excluded.end_date, actual_installment = excluded.actual_installment,
-        updated_at = now()`;
+        updated_at = now()`];
 
     if (b.disbursed_date) {
-      await sql`update proposals set stage = 'Disbursed', updated_at = now()
-                where proposal_id = ${b.proposal_id}`;
+      steps.push(sql`update proposals set stage = 'Disbursed', updated_at = now()
+                     where proposal_id = ${b.proposal_id}`);
+
+      // Disbursement creates the loan's portfolio — exactly one per proposal.
+      // The number is one above the highest on file, worked out inside the
+      // INSERT so it cannot go stale between reading and using it.
+      steps.push(sql`
+        insert into portfolios (portfolio_no, proposal_id, profile_id, investment_amount,
+          disbursed_date, start_date, end_date, duration_months, off_day,
+          service_charge, instl_amount, outstandings, total_collected, status, area_code)
+        select
+          (select coalesce(max(portfolio_no::bigint), 0) + 1 from portfolios
+            where portfolio_no ~ '^[0-9]+$')::text,
+          v.proposal_id, v.profile_id,
+          coalesce(v.approved_amount, v.proposed_amount),
+          v.disbursed_date, v.start_date, v.end_date,
+          coalesce(v.approved_duration_months, v.prop_dur),
+          v.offday,
+          v.total_receivable - coalesce(v.approved_amount, v.proposed_amount),
+          v.actual_installment, v.total_receivable, 0, 'Running', m.area_code
+        from v_lmc v join members m on m.profile_id = v.profile_id
+        where v.proposal_id = ${b.proposal_id}
+          and not exists (select 1 from portfolios where proposal_id = ${b.proposal_id})`);
+
+      // Re-saving the committee form refreshes the loan terms, but only while
+      // nothing has been collected — never rewrite a loan that is under way.
+      steps.push(sql`
+        update portfolios pf set
+          investment_amount = coalesce(v.approved_amount, v.proposed_amount),
+          disbursed_date = v.disbursed_date, start_date = v.start_date, end_date = v.end_date,
+          duration_months = coalesce(v.approved_duration_months, v.prop_dur),
+          service_charge = v.total_receivable - coalesce(v.approved_amount, v.proposed_amount),
+          instl_amount = v.actual_installment,
+          outstandings = v.total_receivable
+        from v_lmc v
+        where pf.proposal_id = ${b.proposal_id} and v.proposal_id = pf.proposal_id
+          and coalesce(pf.total_collected, 0) = 0`);
     }
+
+    await sql.transaction(steps);
 
     const [row] = await sql`select * from v_lmc where proposal_id = ${b.proposal_id}`;
     return NextResponse.json(row);

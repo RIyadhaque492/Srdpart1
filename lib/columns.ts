@@ -177,7 +177,7 @@ export const TARGETS: Record<string, Target> = {
       { col: 'installment',      headers: ['Installment'], kind: 'num' },
       { col: 'cro',              headers: ['CRO'], kind: 'text' },
       { col: 'profit_earned',    headers: ['Profit Earned'], kind: 'num' },
-      { col: 'status',           headers: ['Status'], kind: 'text' },
+      { col: 'status',           headers: ['Status', 'Current_Status', 'Current Status'], kind: 'text' },
     ],
   },
 };

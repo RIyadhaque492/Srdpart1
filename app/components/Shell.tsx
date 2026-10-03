@@ -20,7 +20,19 @@ const GROUPS = [
       { href: '/proposals/new', label: 'New proposal' },
       { href: '/feasibility', label: 'Feasibility', badge: 'feasibility' as const },
       { href: '/approvals', label: 'Committee', badge: 'committee' as const },
+    ],
+  },
+  {
+    title: 'Loans in force',
+    links: [
       { href: '/portfolio', label: 'Portfolio' },
+      { href: '/collections', label: 'Collections' },
+    ],
+  },
+  {
+    title: 'Data',
+    links: [
+      { href: '/import', label: 'Import from Excel' },
     ],
   },
 ];
@@ -36,7 +48,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     fetch('/api/counts').then((r) => r.json()).then(setCounts).catch(() => setCounts(null));
   }, [path]);
 
-  const current = GROUPS.flatMap((g) => g.links).find((l) => l.href === path);
+  const current = GROUPS.flatMap((g) => g.links).find((l) => l.href === path)
+    ?? (path.startsWith('/portfolio/') ? { label: 'Ledger' } : undefined);
 
   return (
     <div className="app">

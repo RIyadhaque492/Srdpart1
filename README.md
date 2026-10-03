@@ -4,8 +4,10 @@ All four SRD entries: the member register, loan proposals, feasibility review an
 one at a time through a form, or many at once by uploading the existing Excel
 workbook. Runs on Vercel with a Neon Postgres database.
 
-Collections are not yet wired into the interface, though the table exists. The tables for them already exist
-in the schema, but nothing in the interface touches them yet.
+Disbursing a loan in the Committee screen now creates its portfolio, and collections
+are recorded against it: **Portfolio** lists every loan, each has a **Ledger**, **Collections**
+records payments (and moves the loan's totals), and **Import from Excel** loads the
+Portfolio and Collections sheets.
 
 ---
 
@@ -20,6 +22,7 @@ your users, then open the **SQL Editor** and run these three files in order:
 |---|---|
 | `db/1-schema.sql` | Creates every table and view |
 | `db/2-seed_lookups.sql` | Loads areas, zones, categories, business types, employees, holidays and the rate schedule, extracted from the `0.Lookup` sheet. Also replaces the installment calculation with a lookup against the real rate table |
+| `db/5-portfolio_collections.sql` | Run after the files above. One-portfolio-per-proposal index, speed indexes, and a check for loans disbursed before portfolios existed |
 | `db/3-fix_ids.sql` | Only needed if data was loaded from generated SQL that wrote IDs as `100001.0`. Harmless to run otherwise |
 
 Then copy the **pooled** connection string from Neon's Connect dialog — the
@@ -125,3 +128,22 @@ workbooks importable.
   Performance Score — are not implemented. The collections table holds the
   repayment history they would need; write them as SQL functions so they
   recompute as payments arrive.
+
+
+---
+
+## Portfolios and collections
+
+- **Disbursement → portfolio.** Saving the Committee form with a disbursed date creates the
+  loan's portfolio (one per proposal, numbered one above the highest on file) in the same
+  transaction as the committee record and the stage change. Re-saving updates the terms only
+  while nothing has been collected.
+- **Collections** (`/collections`) take cash types only — regular, due, settlement, legal. Each one
+  adds to the loan's Total Collected, reduces Outstanding, and marks the loan Finished when it
+  reaches zero. Entries made in the app can be reversed until audited; imported history cannot,
+  because the workbook's totals were not built from those rows.
+- **Check / Audit** are two ticks: audit needs the check first.
+- **Import order:** Members → Portfolio sheet → Collections sheet. Collections for a portfolio not
+  yet on file are reported and skipped rather than slowing the whole upload.
+- Dates are sent as plain days. An earlier version moved every imported date back one day when
+  the browser was in Dhaka time; re-import any sheets loaded before this change.

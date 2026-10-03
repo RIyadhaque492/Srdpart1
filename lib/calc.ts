@@ -72,13 +72,26 @@ export function coerce(value: unknown, kind: FieldKind): unknown {
 
     case 'date':
     case 'ts': {
-      if (raw instanceof Date) return raw.toISOString();
+      // A "date" column holds a calendar day, not an instant. Send "YYYY-MM-DD"
+      // so the day cannot slip when the browser's time zone is not UTC: SheetJS
+      // builds cell dates at local midnight, and toISOString() on those moved
+      // every Dhaka date back by one day (2013-09-22 became 2013-09-21).
+      const out = (d: Date, localParts: boolean) => {
+        if (kind === 'ts') return d.toISOString();
+        if (localParts) {
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${d.getFullYear()}-${m}-${day}`;
+        }
+        return d.toISOString().slice(0, 10);
+      };
+
+      if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : out(raw, true);
       if (typeof raw === 'number') {
         const d = excelSerialToDate(raw);
-        return d ? d.toISOString() : null;
+        return d ? out(d, false) : null;
       }
       const s = String(raw);
-      // The workbook mixes 15-Jul-2015 (handled by Date) with bare numeric dates.
       // A bare 8/20/2026 is month-first; 20/8/2026 is day-first. Decide by which
       // part is over 12, and fall back to day-first, which is the local convention.
       const parts = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
@@ -88,12 +101,12 @@ export function coerce(value: unknown, kind: FieldKind): unknown {
         const day = dayFirst ? a : b;
         const month = dayFirst ? b : a;
         if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-          return new Date(Date.UTC(y, month - 1, day)).toISOString();
+          return out(new Date(Date.UTC(y, month - 1, day)), false);
         }
         return null;
       }
       const parsed = new Date(s);
-      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      return Number.isNaN(parsed.getTime()) ? null : out(parsed, true);
     }
   }
 }

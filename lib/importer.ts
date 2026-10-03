@@ -42,14 +42,67 @@ function buildStatement(target: Target, cols: string[], rows: StagedRow[]) {
   };
 }
 
+
+/**
+ * Check references before writing, so one missing parent does not push a
+ * whole batch into the slow row-by-row retry (the collections sheet has ~50,000
+ * rows). Collections whose portfolio is not on file are reported and skipped.
+ * Portfolios keep their row but lose a link to a member or proposal that is not
+ * on file — the same thing 3-fix_ids.sql does — and say so in `notes`.
+ */
+async function checkReferences(targetKey: string, rows: StagedRow[]) {
+  const errors: RowError[] = [];
+  const notes: string[] = [];
+
+  if (targetKey === 'collections') {
+    const nos = Array.from(new Set(rows.map((r) => String(r.values.portfolio_no))));
+    const found = (await sql.query(
+      'select portfolio_no from portfolios where portfolio_no = any($1)', [nos],
+    )) as { portfolio_no: string }[];
+    const known = new Set(found.map((f) => f.portfolio_no));
+    const keep = rows.filter((r) => {
+      if (known.has(String(r.values.portfolio_no))) return true;
+      errors.push({ row: r.excelRow, problem: `Portfolio ${r.values.portfolio_no} is not on file — import the Portfolio sheet first` });
+      return false;
+    });
+    return { rows: keep, errors, notes };
+  }
+
+  if (targetKey === 'portfolios') {
+    const ids = (k: string) =>
+      Array.from(new Set(rows.map((r) => r.values[k]).filter(Boolean).map(String)));
+    const [mem, prop] = await Promise.all([
+      sql.query('select profile_id from members where profile_id = any($1)', [ids('profile_id')]),
+      sql.query('select proposal_id from proposals where proposal_id = any($1)', [ids('proposal_id')]),
+    ]) as [{ profile_id: string }[], { proposal_id: string }[]];
+    const members = new Set(mem.map((m) => m.profile_id));
+    const proposals = new Set(prop.map((p) => p.proposal_id));
+    let unlinked = 0;
+    for (const r of rows) {
+      let hit = false;
+      if (r.values.profile_id && !members.has(String(r.values.profile_id))) { delete r.values.profile_id; hit = true; }
+      if (r.values.proposal_id && !proposals.has(String(r.values.proposal_id))) { delete r.values.proposal_id; hit = true; }
+      if (hit) unlinked++;
+    }
+    if (unlinked) notes.push(`${unlinked} portfolio row(s) saved without a member/proposal link because that member or proposal is not on file yet.`);
+  }
+
+  return { rows, errors, notes };
+}
+
 /**
  * Write one batch. If it fails, retry row by row so a single bad row is
  * reported by its Excel row number instead of taking the batch down with it.
  */
-export async function writeBatch(targetKey: string, rows: StagedRow[]) {
+export async function writeBatch(targetKey: string, input: StagedRow[]) {
   const target = TARGETS[targetKey];
   if (!target) throw new Error(`Unknown target: ${targetKey}`);
-  if (!rows.length) return { ok: 0, errors: [] as RowError[] };
+  if (!input.length) return { ok: 0, errors: [] as RowError[], notes: [] as string[] };
+
+  const checked = await checkReferences(targetKey, input);
+  const rows = checked.rows;
+  const notes = checked.notes;
+  if (!rows.length) return { ok: 0, errors: checked.errors, notes };
 
   // collections have no natural key; hash the content so re-uploads dedupe
   if (targetKey === 'collections') {
@@ -57,7 +110,7 @@ export async function writeBatch(targetKey: string, rows: StagedRow[]) {
   }
 
   const cols = Array.from(new Set(rows.flatMap((r) => Object.keys(r.values))));
-  const errors: RowError[] = [];
+  const errors: RowError[] = [...checked.errors];
   let ok = 0;
 
   for (let i = 0; i < rows.length; i += CHUNK) {
@@ -79,7 +132,7 @@ export async function writeBatch(targetKey: string, rows: StagedRow[]) {
     }
   }
 
-  return { ok, errors };
+  return { ok, errors, notes };
 }
 
 export async function logImport(

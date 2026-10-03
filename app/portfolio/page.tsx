@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 
 interface Row {
   portfolio_no: string; profile_id: string | null; member_name: string | null;
@@ -66,7 +67,7 @@ export default function Portfolio() {
       <h2>Portfolio</h2>
       <p className="note">
         Every disbursed loan with what has been collected and what is still owed.
-        Tap a row to see its latest collections.
+        Tap a row for its latest collections, or its number for the full ledger.
       </p>
 
       {error && <div className="msg">{error}</div>}
@@ -103,7 +104,7 @@ export default function Portfolio() {
 
       {loading && <p className="note">Loading…</p>}
       {!loading && data && data.rows.length === 0 && (
-        <p className="note">No portfolios found. Import the <code>5.Portfolio</code> sheet from the Members page if the table is empty.</p>
+        <p className="note">No portfolios found. If the table is empty, load the <code>5.Portfolio</code> sheet on the <Link href="/import">Import</Link> page.</p>
       )}
 
       {data && data.rows.length > 0 && (
@@ -121,7 +122,7 @@ export default function Portfolio() {
               {data.rows.map((r) => (
                 <Fragment key={r.portfolio_no}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => toggle(r.portfolio_no)}>
-                    <td>{r.portfolio_no}</td>
+                    <td><Link href={`/portfolio/${r.portfolio_no}`} onClick={(e) => e.stopPropagation()}>{r.portfolio_no}</Link></td>
                     <td>{r.member_name ?? r.profile_id ?? '—'}</td>
                     <td className="num">{bdt(r.investment_amount)}</td>
                     <td>{day(r.disbursed_date)}</td>
