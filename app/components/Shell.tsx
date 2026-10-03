@@ -20,6 +20,7 @@ const GROUPS = [
       { href: '/proposals/new', label: 'New proposal' },
       { href: '/feasibility', label: 'Feasibility', badge: 'feasibility' as const },
       { href: '/approvals', label: 'Committee', badge: 'committee' as const },
+      { href: '/portfolio', label: 'Portfolio' },
     ],
   },
 ];
