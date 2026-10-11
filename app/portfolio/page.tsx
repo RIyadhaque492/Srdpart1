@@ -39,7 +39,7 @@ export default function Portfolio() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
   const [colls, setColls] = useState<Coll[] | null>(null);
 
@@ -78,8 +78,8 @@ export default function Portfolio() {
     <>
       <h2>Portfolio</h2>
       <p className="note">
-        Columns A to AF of the Portfolio sheet. Scroll sideways to see them all. Tap a row for its
-        latest collections, or its number for the full ledger.
+        Every portfolio of every member, with all columns of the Portfolio sheet. Scroll sideways to
+        see them all. Tap a row for its latest collections, or its number for the full ledger.
       </p>
 
       {error && <div className="msg">{error}</div>}
@@ -116,7 +116,7 @@ export default function Portfolio() {
 
       <label className="hint" style={{ display: 'block', marginBottom: 12 }}>
         <input type="checkbox" checked={more} onChange={(e) => setMore(e.target.checked)} />{' '}
-        Also show the remaining {PF_COLUMNS.length - FIRST} columns ({letter(FIRST)} onward)
+        Show all {PF_COLUMNS.length} columns (untick to show only A to {letter(FIRST - 1)})
       </label>
 
       {loading && <p className="note">Loading…</p>}
