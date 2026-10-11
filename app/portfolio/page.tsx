@@ -2,13 +2,14 @@
 
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { PF_COLUMNS, showPf } from '@/lib/portfolioColumns';
+
+// Columns A to AF of the Portfolio sheet are the first 32 entries of PF_COLUMNS.
+const FIRST = 32;
 
 interface Row {
-  portfolio_no: string; profile_id: string | null; member_name: string | null;
-  investment_amount: string | null; disbursed_date: string | null; end_date: string | null;
-  duration_months: number | null; instl_amount: string | null;
-  total_collected: string | null; outstandings: string | null;
-  status: string | null; area_code: string | null;
+  [key: string]: unknown;
+  portfolio_no: string;
 }
 interface Coll {
   id: number; transaction_date: string | null; amount: string;
@@ -22,7 +23,14 @@ interface Data {
 }
 
 const bdt = (n: unknown) => (n == null ? '—' : '৳' + Number(n).toLocaleString('en-IN'));
-const day = (d: string | null) => (d ? String(d).slice(0, 10) : '—');
+const day = (d: unknown) => (d ? String(d).slice(0, 10) : '—');
+
+/** 0 → A, 25 → Z, 26 → AA, 31 → AF */
+function letter(i: number): string {
+  let s = '';
+  for (let n = i; n >= 0; n = Math.floor(n / 26) - 1) s = String.fromCharCode(65 + (n % 26)) + s;
+  return s;
+}
 
 export default function Portfolio() {
   const [q, setQ] = useState('');
@@ -31,13 +39,17 @@ export default function Portfolio() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [more, setMore] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [colls, setColls] = useState<Coll[] | null>(null);
+
+  const cols = more ? PF_COLUMNS : PF_COLUMNS.slice(0, FIRST);
+  const align = (k: string) => (k === 'text' || k === 'date' ? '' : 'num');
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const qs = new URLSearchParams({ q, status, area });
+      const qs = new URLSearchParams({ q, status, area, all: '1', limit: '3000' });
       const res = await fetch(`/api/portfolios?${qs}`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       setData(await res.json());
@@ -66,8 +78,8 @@ export default function Portfolio() {
     <>
       <h2>Portfolio</h2>
       <p className="note">
-        Every disbursed loan with what has been collected and what is still owed.
-        Tap a row for its latest collections, or its number for the full ledger.
+        Columns A to AF of the Portfolio sheet. Scroll sideways to see them all. Tap a row for its
+        latest collections, or its number for the full ledger.
       </p>
 
       {error && <div className="msg">{error}</div>}
@@ -102,6 +114,11 @@ export default function Portfolio() {
         </div>
       </div>
 
+      <label className="hint" style={{ display: 'block', marginBottom: 12 }}>
+        <input type="checkbox" checked={more} onChange={(e) => setMore(e.target.checked)} />{' '}
+        Also show the remaining {PF_COLUMNS.length - FIRST} columns ({letter(FIRST)} onward)
+      </label>
+
       {loading && <p className="note">Loading…</p>}
       {!loading && data && data.rows.length === 0 && (
         <p className="note">No portfolios found. If the table is empty, load the <code>5.Portfolio</code> sheet on the <Link href="/import">Import</Link> page.</p>
@@ -112,30 +129,31 @@ export default function Portfolio() {
           <table>
             <thead>
               <tr>
-                <th>PF No</th><th>Member</th><th className="num">Investment</th>
-                <th>Disbursed</th><th>Ends</th><th className="num">Installment</th>
-                <th className="num">Collected</th><th className="num">Outstanding</th>
-                <th>Status</th><th>Area</th>
+                {cols.map((c, i) => (
+                  <th key={c.key} className={align(c.kind)}>
+                    <span className="hint" style={{ display: 'block', fontWeight: 400 }}>{i < FIRST ? letter(i) : ''}</span>
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {data.rows.map((r) => (
                 <Fragment key={r.portfolio_no}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => toggle(r.portfolio_no)}>
-                    <td><Link href={`/portfolio/${r.portfolio_no}`} onClick={(e) => e.stopPropagation()}>{r.portfolio_no}</Link></td>
-                    <td>{r.member_name ?? r.profile_id ?? '—'}</td>
-                    <td className="num">{bdt(r.investment_amount)}</td>
-                    <td>{day(r.disbursed_date)}</td>
-                    <td>{day(r.end_date)}</td>
-                    <td className="num">{bdt(r.instl_amount)}</td>
-                    <td className="num">{bdt(r.total_collected)}</td>
-                    <td className="num">{bdt(r.outstandings)}</td>
-                    <td>{r.status ?? '—'}</td>
-                    <td>{r.area_code ?? '—'}</td>
+                    {cols.map((c) => (
+                      <td key={c.key} className={align(c.kind)}>
+                        {c.key === 'portfolio_no'
+                          ? <Link href={`/portfolio/${r.portfolio_no}`} onClick={(e) => e.stopPropagation()}>{r.portfolio_no}</Link>
+                          : c.key === 'member_name'
+                            ? String(r.display_name ?? r.member_name ?? r.profile_id ?? '—')
+                            : showPf(r[c.key], c.kind)}
+                      </td>
+                    ))}
                   </tr>
                   {open === r.portfolio_no && (
                     <tr>
-                      <td colSpan={10}>
+                      <td colSpan={cols.length}>
                         {colls === null && <span className="hint">Loading collections…</span>}
                         {colls && colls.length === 0 && <span className="hint">No collections recorded for this portfolio.</span>}
                         {colls && colls.length > 0 && (
