@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { matches } from '@/lib/text';
 
 const CASH = ['Regular Collection', 'Due Collection', 'Settlement Collection', 'Legal Collection'];
 
 interface Pf {
+  profile_id?: string | null; contact?: string | null;
   portfolio_no: string; member_name: string | null; instl_amount: string | null;
   outstandings: string | null; status: string | null;
 }
@@ -21,9 +23,10 @@ const todayLocal = () => new Date().toLocaleDateString('en-CA');
 
 export default function Collections() {
   // ---- record form
+  const [loans, setLoans] = useState<Pf[] | null>(null);
   const [find, setFind] = useState('');
-  const [hits, setHits] = useState<Pf[]>([]);
   const [pf, setPf] = useState<Pf | null>(null);
+  const [today, setToday] = useState<{ n: string; cash: string } | null>(null);
   const [date, setDate] = useState(todayLocal());
   const [amount, setAmount] = useState('');
   const [kind, setKind] = useState(CASH[0]);
@@ -48,7 +51,7 @@ export default function Collections() {
       const res = await fetch(`/api/collections?${qs}`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const d = await res.json();
-      setRows(d.rows); setCash(d.summary.cash);
+      setRows(d.rows); setCash(d.summary.cash); setToday(d.today ?? null);
     } catch (e) {
       setMsg({ ok: false, text: `Could not load collections: ${(e as Error).message}` });
     } finally { setLoading(false); }
@@ -56,29 +59,38 @@ export default function Collections() {
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
+  // Every running loan is loaded once and filtered in the browser, so the whole
+  // list is visible and narrows as you type (member, Portfolio No, Profile ID, contact).
+  const loadLoans = useCallback(async (): Promise<Pf[]> => {
+    try {
+      const res = await fetch('/api/portfolios?status=Running&limit=3000');
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const d = await res.json();
+      setLoans(d.rows);
+      return d.rows as Pf[];
+    } catch (e) {
+      setMsg({ ok: false, text: `Could not load running loans: ${(e as Error).message}` });
+      setLoans([]);
+      return [];
+    }
+  }, []);
+
   // arrive from a ledger with ?pf=1234
   useEffect(() => {
-    const no = new URLSearchParams(window.location.search).get('pf');
-    if (no) lookup(no, true);
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+    loadLoans().then((list) => {
+      const no = new URLSearchParams(window.location.search).get('pf');
+      const hit = no ? list.find((r) => r.portfolio_no === no) : undefined;
+      if (hit) choose(hit);
+    });
+  }, [loadLoans]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function lookup(text: string, exact = false) {
-    if (!text.trim()) { setHits([]); return; }
-    const res = await fetch(`/api/portfolios?q=${encodeURIComponent(text)}&status=Running`);
-    if (!res.ok) return;
-    const d = await res.json();
-    const list: Pf[] = d.rows.slice(0, 6);
-    if (exact) { const m = list.find((r) => r.portfolio_no === text); if (m) choose(m); }
-    else setHits(list);
-  }
-  useEffect(() => {
-    if (pf) return;
-    const t = setTimeout(() => lookup(find), 250);
-    return () => clearTimeout(t);
-  }, [find, pf]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = useMemo(
+    () => (loans ?? []).filter((l) => matches([l.portfolio_no, l.profile_id, l.member_name, l.contact], find)),
+    [loans, find],
+  );
 
   function choose(p: Pf) {
-    setPf(p); setHits([]); setFind(''); setConfirm(null); setMsg(null);
+    setPf(p); setFind(''); setConfirm(null); setMsg(null);
     setAmount(p.instl_amount ? String(Math.round(Number(p.instl_amount))) : '');
   }
 
@@ -98,6 +110,10 @@ export default function Collections() {
       setMsg({ ok: true, text: `Recorded ${bdt(amount)} for portfolio ${pf.portfolio_no}.` +
         (d.status === 'Loan Finished' ? ' The loan is now fully paid.' : '') });
       setPf({ ...pf, outstandings: d.outstandings, status: d.status });
+      // keep the list live: a finished loan leaves it, others show the new balance
+      setLoans((prev) => prev && (d.status === 'Loan Finished'
+        ? prev.filter((l) => l.portfolio_no !== pf.portfolio_no)
+        : prev.map((l) => l.portfolio_no === pf.portfolio_no ? { ...l, outstandings: d.outstandings } : l)));
       setAmount(''); setRemarks('');
       load();
     } catch {
@@ -124,7 +140,14 @@ export default function Collections() {
     const res = await fetch(`/api/collections?id=${r.id}`, { method: 'DELETE' });
     const d = await res.json();
     if (!res.ok) setMsg({ ok: false, text: d.error ?? 'Could not reverse.' });
-    else { setMsg({ ok: true, text: 'Collection reversed.' }); if (pf?.portfolio_no === r.portfolio_no) lookup(r.portfolio_no, true); load(); }
+    else {
+      setMsg({ ok: true, text: 'Collection reversed.' });
+      loadLoans().then((list) => {
+        const m = list.find((x) => x.portfolio_no === r.portfolio_no);
+        if (pf?.portfolio_no === r.portfolio_no && m) setPf(m);
+      });
+      load();
+    }
   }
 
   function toggle(id: number) {
@@ -141,19 +164,43 @@ export default function Collections() {
 
       {msg && <div className={`msg${msg.ok ? ' ok' : ''}`}>{msg.text}</div>}
 
+      {today && (
+        <p className="note">
+          Today: <strong>{Number(today.n).toLocaleString('en-IN')}</strong> entries · cash collected <strong>{bdt(today.cash)}</strong>
+        </p>
+      )}
+
       <h3>Record a collection</h3>
       {!pf ? (
-        <div className="field" style={{ maxWidth: 420 }}>
-          <label htmlFor="find">Find a running loan by member name, Portfolio No or Profile ID</label>
-          <input id="find" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Type to search…" />
-          {hits.map((h) => (
-            <button key={h.portfolio_no} className="quiet" style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}
-                    onClick={() => choose(h)}>
-              {h.portfolio_no} · {h.member_name ?? 'Unknown member'} · due {bdt(h.outstandings)}
-            </button>
-          ))}
-          {find && hits.length === 0 && <p className="hint">No running loan matches.</p>}
-        </div>
+        <>
+          <div className="field" style={{ maxWidth: 420 }}>
+            <label htmlFor="find">Search by member, Portfolio No, Profile ID or contact</label>
+            <input id="find" value={find} onChange={(e) => setFind(e.target.value)}
+                   placeholder="Type to narrow the list…" autoComplete="off" inputMode="search" />
+            <span className="hint">
+              {loans ? (find ? `${shown.length} of ${loans.length} running loans` : `${loans.length} running loans`) : 'Loading loans…'}
+            </span>
+          </div>
+          {loans && shown.length === 0 && <p className="note">No running loan matches.</p>}
+          {shown.length > 0 && (
+            <div className="scroller" style={{ maxHeight: 420, overflowY: 'auto', maxWidth: 720 }}>
+              <table>
+                <thead><tr><th>PF No</th><th>Member</th><th className="num">Installment</th><th className="num">Outstanding</th><th /></tr></thead>
+                <tbody>
+                  {shown.map((h) => (
+                    <tr key={h.portfolio_no} onClick={() => choose(h)} style={{ cursor: 'pointer' }}>
+                      <td>{h.portfolio_no}</td>
+                      <td>{h.member_name ?? h.profile_id ?? 'Unknown member'}</td>
+                      <td className="num">{bdt(h.instl_amount)}</td>
+                      <td className="num">{bdt(h.outstandings)}</td>
+                      <td style={{ color: 'var(--accent)' }}>Choose</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       ) : (
         <>
           <div className="picked" style={{ marginBottom: 16 }}>

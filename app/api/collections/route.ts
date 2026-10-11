@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const params: unknown[] = [];
   if (q) {
     params.push('%' + q + '%');
-    where.push(`(c.portfolio_no ilike $${params.length} or m.member_name ilike $${params.length})`);
+    where.push(`(c.portfolio_no ilike $${params.length} or m.member_name ilike $${params.length} or pf.member_name ilike $${params.length})`);
   }
   if (DATE.test(from)) { params.push(from); where.push(`c.transaction_date >= $${params.length}`); }
   if (DATE.test(to))   { params.push(to);   where.push(`c.transaction_date <= $${params.length}`); }
@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
                  left join members m on m.profile_id = pf.profile_id ${w}`;
 
   const cashIdx = params.length + 1;
-  const [rows, sum] = await Promise.all([
+  const [rows, sum, todayRows] = await Promise.all([
     sql.query(
-      `select c.id, c.portfolio_no, m.member_name, c.transaction_date, c.amount,
+      `select c.id, c.portfolio_no, coalesce(m.member_name, pf.member_name) as member_name, c.transaction_date, c.amount,
               c.particulars, c.installment, c.entry_by, c.remarks, c.checked, c.audited,
               (c.source_hash like 'app:%') as app_entry
        ${from_} order by c.transaction_date desc nulls last, c.id desc limit 200`, params),
@@ -41,8 +41,12 @@ export async function GET(req: NextRequest) {
       `select count(*) as n,
               coalesce(sum(c.amount) filter (where c.particulars = any($${cashIdx})), 0) as cash
        ${from_}`, [...params, [...CASH_TYPES]]),
+    // Bangladesh day, whatever time zone the server runs in.
+    sql`select count(*) as n,
+               coalesce(sum(amount) filter (where particulars = any(${[...CASH_TYPES]}::text[])), 0) as cash
+        from collections where transaction_date = (now() at time zone 'Asia/Dhaka')::date`,
   ]);
-  return NextResponse.json({ rows, summary: (sum as any[])[0] });
+  return NextResponse.json({ rows, summary: (sum as any[])[0], today: (todayRows as any[])[0] });
 }
 
 /** Record one cash collection and move the portfolio's totals in the same transaction. */

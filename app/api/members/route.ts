@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { asciiDigits } from '@/lib/text';
 
 export const runtime = 'nodejs';
 
@@ -7,8 +8,17 @@ const DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const GENDERS = ['Male', 'Female', 'Other'];
 
 export async function GET(req: NextRequest) {
-  const q = (req.nextUrl.searchParams.get('q') ?? '').trim();
+  const q = asciiDigits((req.nextUrl.searchParams.get('q') ?? '').trim());
   const limit = Math.min(Number(req.nextUrl.searchParams.get('limit') ?? 50), 200);
+
+  // The pickers load the whole list once and filter it in the browser.
+  if (req.nextUrl.searchParams.get('brief') === '1') {
+    return NextResponse.json(await sql`
+      select m.profile_id, m.member_name, m.primary_contact, m.nid_no, m.business_name, m.area_code,
+             v.no_of_portfolios, v.last_portfolio, v.pf_status
+      from members m left join v_member_portfolio v using (profile_id)
+      order by m.profile_id desc limit 5000`);
+  }
 
   const rows = q
     ? await sql`select m.*, v.no_of_portfolios, v.last_portfolio, v.pf_status
@@ -17,6 +27,7 @@ export async function GET(req: NextRequest) {
                    or m.profile_id ilike ${'%' + q + '%'}
                    or m.primary_contact ilike ${'%' + q + '%'}
                    or m.nid_no ilike ${'%' + q + '%'}
+                   or m.business_name ilike ${'%' + q + '%'}
                 order by m.profile_id desc limit ${limit}`
     : await sql`select m.*, v.no_of_portfolios, v.last_portfolio, v.pf_status
                 from members m left join v_member_portfolio v using (profile_id)

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { matches } from '@/lib/text';
 import { stageSheet, type ParsedSheet } from '@/lib/parse';
 
 const bdt = (n: unknown) =>
@@ -24,7 +25,11 @@ export default function NewProposal() {
 
 /* ------------------------------------------------------------ manual entry */
 
-interface MemberHit { profile_id: string; member_name: string; primary_contact: string | null }
+interface MemberHit {
+  profile_id: string; member_name: string; primary_contact: string | null;
+  nid_no?: string | null; business_name?: string | null; area_code?: string | null;
+  no_of_portfolios?: number | null; pf_status?: string | null;
+}
 interface Detail {
   member: {
     profile_id: string; member_name: string; business_name: string | null;
@@ -58,8 +63,8 @@ function mclOptions(d: Detail): string[] {
 
 function ManualEntry() {
   const [q, setQ] = useState('');
-  const [hits, setHits] = useState<MemberHit[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [all, setAll] = useState<MemberHit[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
 
   const [oldMcl, setOldMcl] = useState('New');
@@ -74,21 +79,23 @@ function ManualEntry() {
   const [open, setOpen] = useState<{ proposal_id: string; stage: string }[]>([]);
   const [saved, setSaved] = useState<{ proposal_id: string; customer_name: string; proposed_installment: string } | null>(null);
 
-  // search members as the user types
+  // Load every member once, then filter in the browser: the full list is visible
+  // straight away and narrows as you type (name, Profile ID, contact, NID, business).
   useEffect(() => {
-    if (detail || q.trim().length < 2) { setHits([]); return; }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/members?q=${encodeURIComponent(q)}&limit=8`);
-        setHits(await res.json());
-      } catch { setHits([]); } finally { setSearching(false); }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q, detail]);
+    if (detail || all) return;
+    fetch('/api/members?brief=1')
+      .then((r) => { if (!r.ok) throw new Error(`Server returned ${r.status}`); return r.json(); })
+      .then((rows: MemberHit[]) => { setAll(rows); setListError(null); })
+      .catch((e) => setListError(`Could not load members: ${(e as Error).message}`));
+  }, [detail, all]);
+
+  const hits = useMemo(
+    () => (all ?? []).filter((m) => matches([m.profile_id, m.member_name, m.primary_contact, m.nid_no, m.business_name], q)),
+    [all, q],
+  );
 
   async function pick(id: string) {
-    setHits([]); setError(null);
+    setError(null);
     try {
       const res = await fetch(`/api/members/${encodeURIComponent(id)}`);
       const d: Detail = await res.json();
@@ -113,7 +120,7 @@ function ManualEntry() {
   }, [amount, months, detail]);
 
   function reset() {
-    setQ(''); setHits([]); setDetail(null); setOldMcl('New');
+    setQ(''); setDetail(null); setOldMcl('New');
     setAmount(''); setMonths(''); setCrScore('');
     setQuote(null); setError(null); setOpen([]);
   }
@@ -175,25 +182,31 @@ function ManualEntry() {
       {!detail ? (
         <>
           <div className="field" style={{ maxWidth: 420 }}>
-            <label htmlFor="q">Search by name, Profile ID or contact</label>
+            <label htmlFor="q">Search by name, Profile ID, contact or business</label>
             <input id="q" value={q} onChange={(e) => setQ(e.target.value)}
-                   placeholder="Start typing…" autoComplete="off" />
-            {searching && <span className="hint">Searching…</span>}
+                   placeholder="Type to narrow the list…" autoComplete="off" inputMode="search" />
+            <span className="hint">
+              {listError ?? (all ? (q ? `${hits.length} of ${all.length} members` : `${all.length} members`) : 'Loading members…')}
+            </span>
           </div>
+          {all && hits.length === 0 && <p className="note">No member matches. Check the spelling or add the member first.</p>}
           {hits.length > 0 && (
-            <table style={{ maxWidth: 560 }}>
-              <tbody>
-                {hits.map((h) => (
-                  <tr key={h.profile_id} onClick={() => pick(h.profile_id)}
-                      style={{ cursor: 'pointer' }}>
-                    <td>{h.profile_id}</td>
-                    <td>{h.member_name}</td>
-                    <td>{h.primary_contact ?? '—'}</td>
-                    <td style={{ color: 'var(--accent)' }}>Choose</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="scroller" style={{ maxHeight: 420, overflowY: 'auto', maxWidth: 640 }}>
+              <table>
+                <thead><tr><th>ID</th><th>Member</th><th>Contact</th><th className="num">Loans</th><th /></tr></thead>
+                <tbody>
+                  {hits.map((h) => (
+                    <tr key={h.profile_id} onClick={() => pick(h.profile_id)} style={{ cursor: 'pointer' }}>
+                      <td>{h.profile_id}</td>
+                      <td>{h.member_name}{h.business_name ? <div className="hint">{h.business_name}</div> : null}</td>
+                      <td>{h.primary_contact ?? '—'}</td>
+                      <td className="num">{h.no_of_portfolios ?? 0}</td>
+                      <td style={{ color: 'var(--accent)' }}>Choose</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       ) : (

@@ -23,13 +23,15 @@ export async function GET(req: NextRequest) {
   const q = (p.get('q') ?? '').trim();
   const status = (p.get('status') ?? '').trim();
   const area = (p.get('area') ?? '').trim();
+  const all = p.get('all') === '1';
+  const lim = Math.min(Math.max(Math.floor(Number(p.get('limit'))) || 200, 1), 3000);
 
   const where: string[] = [];
   const params: unknown[] = [];
   if (q) {
     params.push('%' + q + '%');
     const i = params.length;
-    where.push(`(m.member_name ilike $${i} or pf.portfolio_no ilike $${i} or pf.profile_id ilike $${i})`);
+    where.push(`(m.member_name ilike $${i} or pf.member_name ilike $${i} or pf.portfolio_no ilike $${i} or pf.profile_id ilike $${i})`);
   }
   if (status) { params.push(status); where.push(`pf.status = $${params.length}`); }
   if (area)   { params.push(area);   where.push(`pf.area_code = $${params.length}`); }
@@ -37,12 +39,15 @@ export async function GET(req: NextRequest) {
 
   const [rows, summary, statuses, areas] = await Promise.all([
     sql.query(
-      `select pf.portfolio_no, pf.profile_id, m.member_name, pf.investment_amount,
-              pf.disbursed_date, pf.end_date, pf.duration_months, pf.instl_amount,
-              pf.total_collected, pf.outstandings, pf.status, pf.area_code
+      `select ${all
+        ? "pf.*, coalesce(m.member_name, pf.member_name) as display_name"
+        : `pf.portfolio_no, pf.profile_id, coalesce(m.member_name, pf.member_name) as member_name,
+              pf.investment_amount, pf.disbursed_date, pf.end_date, pf.duration_months,
+              pf.instl_amount, pf.total_collected, pf.outstandings, pf.status, pf.area_code,
+              m.primary_contact as contact`}
        from portfolios pf left join members m on m.profile_id = pf.profile_id
        ${w}
-       order by pf.disbursed_date desc nulls last, pf.portfolio_no desc limit 200`, params),
+       order by pf.disbursed_date desc nulls last, pf.portfolio_no desc limit ${lim}`, params),
     sql.query(
       `select count(*) as total,
               coalesce(sum(pf.investment_amount),0) as invested,
